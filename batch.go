@@ -21,7 +21,7 @@ func retrieveBatches(ctx context.Context, c *http.Client) ([]GptBatchResponse, g
 
 	var cursor string
 	for {
-		url := "https://api.openai.com/v1/batches&limit=100"
+		url := "https://api.openai.com/v1/batches?limit=100"
 		if cursor != "" {
 			url += "&after=" + cursor
 		}
