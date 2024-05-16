@@ -22,7 +22,13 @@ type Gpt struct {
 
 type Option func(*Gpt)
 
-var WithModel = func(model string) Option { return func(g *Gpt) { g.model = model } }
+var WithModel = func(model string) Option {
+	return func(g *Gpt) {
+		if model != "" {
+			g.model = model
+		}
+	}
+}
 var WithCacheDir = func(cacheDir string) Option { return func(g *Gpt) { g.cacheDir = cacheDir } }
 
 func NewGpt(token string, opts ...Option) (*Gpt, error) {
