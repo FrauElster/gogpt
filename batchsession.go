@@ -34,6 +34,7 @@ type GptBatchSession struct {
 
 	// for creation
 	createBatchData []byte
+	requestCount    int
 
 	cacheDir string
 }
@@ -69,6 +70,10 @@ func (s *GptBatchSession) AddToBatch(customRequestId, systemPrompt, userPrompt s
 		},
 	}
 
+	if s.requestCount >= 50000 {
+		return ErrExceedsFileLimit.WithError(errors.New("exceeds request limit")).WithOrigin()
+	}
+
 	serialized, err := json.Marshal(req)
 	if err != nil {
 		return ErrSerializeBatchRequest.WithError(err).WithOrigin()
@@ -81,6 +86,7 @@ func (s *GptBatchSession) AddToBatch(customRequestId, systemPrompt, userPrompt s
 	}
 
 	s.createBatchData = append(s.createBatchData, serialized...)
+	s.requestCount++
 	return nil
 }
 

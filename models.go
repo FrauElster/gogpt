@@ -99,6 +99,7 @@ const (
 	BatchStatusInProgress GptBatchStatus = "in_progress"
 	BatchStatusComplete   GptBatchStatus = "completed"
 	BatchStatusFailed     GptBatchStatus = "failed"
+	BatchStatusFinalizing GptBatchStatus = "finalizing"
 )
 
 type GptBatchResponse struct {
