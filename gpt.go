@@ -44,7 +44,7 @@ func NewGpt(token string, opts ...Option) (*Gpt, error) {
 
 	gpt := &Gpt{
 		token:  token,
-		model:  "gpt-4o",
+		model:  "gpt-4o-mini",
 		seed:   420,
 		client: &http.Client{Transport: backOffTransport},
 	}

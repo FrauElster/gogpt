@@ -49,6 +49,8 @@ type appliedRequestOption struct {
 
 type RequestOption func(*appliedRequestOption) error
 
+// WithJsonSchema adds a JSON schema to the request as response format.
+// v must be a struct or pointer to a struct.
 var WithJsonSchema = func(v any) RequestOption {
 	return func(a *appliedRequestOption) error {
 		schema, err := getJsonSchema(v)
@@ -315,8 +317,14 @@ func (s *GptBatchSession) getFile(ctx context.Context, fileId string) ([]byte, g
 }
 
 func getJsonSchema(v any) (map[string]any, error) {
-	if v == nil || reflect.ValueOf(v).Kind() != reflect.Ptr || reflect.ValueOf(v).Elem().Kind() != reflect.Struct {
-		return nil, fmt.Errorf("input must be a non-nil pointer to a struct")
+	if v == nil {
+		return nil, fmt.Errorf("input must be a struct or a non-nil pointer to a struct")
+	}
+	if reflect.ValueOf(v).Kind() != reflect.Struct && reflect.ValueOf(v).Kind() != reflect.Ptr {
+		return nil, fmt.Errorf("input must be a struct or a non-nil pointer to a struct")
+	}
+	if reflect.ValueOf(v).Kind() == reflect.Ptr && reflect.ValueOf(v).Elem().Kind() != reflect.Struct {
+		return nil, fmt.Errorf("input must be a struct or a non-nil pointer to a struct")
 	}
 
 	// Generate the schema using the jsonschema package
