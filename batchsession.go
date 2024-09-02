@@ -10,9 +10,11 @@ import (
 	"net/http"
 	"os"
 	"path"
+	"reflect"
 	"time"
 
 	"github.com/FrauElster/goerror"
+	"github.com/invopop/jsonschema"
 )
 
 var (
@@ -39,6 +41,32 @@ type GptBatchSession struct {
 	cacheDir string
 }
 
+type appliedRequestOption struct {
+	model          string
+	seed           int
+	responseFormat gptResponseFormat
+}
+
+type RequestOption func(*appliedRequestOption) error
+
+var WithJsonSchema = func(v any) RequestOption {
+	return func(a *appliedRequestOption) error {
+		schema, err := getJsonSchema(v)
+		if err != nil {
+			return goerror.New("gpt:json_schema", "failed to get json schema").WithError(err).WithOrigin()
+		}
+
+		a.responseFormat.Type = "json_schema"
+		a.responseFormat.JsonSchema = &gptJsonSchema{
+			Name:   getStructName(v),
+			Strict: true,
+			Schema: schema,
+		}
+
+		return nil
+	}
+}
+
 // AddToBatch adds a request to the current batch data.
 // The customRequestId is used to identify the request in the batch.
 // It should have an application wide prefix to avoid collisions with other applications that batch data.
@@ -48,14 +76,24 @@ type GptBatchSession struct {
 // If AddToBatch is called the third time, the lineIdx of the request within the current batch is 2.
 // If the batch data exceeds the 512MB limit, ErrExceedsFileLimit is returned,
 // signaling that the s.CreateBatch() should be called to flush the current batch data
-func (s *GptBatchSession) AddToBatch(customRequestId, systemPrompt, userPrompt string) goerror.TraceableError {
+func (s *GptBatchSession) AddToBatch(customRequestId, systemPrompt, userPrompt string, options ...RequestOption) goerror.TraceableError {
+	opts := &appliedRequestOption{
+		model:          s.model,
+		seed:           s.seed,
+		responseFormat: gptResponseFormat{Type: "json_object"},
+	}
+	for _, opt := range options {
+		if err := opt(opts); err != nil {
+			return goerror.New("gpt:add_to_batch", "failed to apply option").WithError(err).WithOrigin()
+		}
+	}
 	req := gptBatchSingleRequest{
 		CustomId: customRequestId,
 		Method:   "POST",
 		Url:      "/v1/chat/completions",
 		Body: gptPromptRequest{
-			Model: s.model,
-			Seed:  s.seed,
+			Model: opts.model,
+			Seed:  opts.seed,
 			Messages: []struct {
 				Role    string `json:"role"`
 				Content string `json:"content"`
@@ -63,10 +101,8 @@ func (s *GptBatchSession) AddToBatch(customRequestId, systemPrompt, userPrompt s
 				{Role: "system", Content: systemPrompt},
 				{Role: "user", Content: userPrompt},
 			},
-			Temperature: 0,
-			ResponseFormat: struct {
-				Type string `json:"type"`
-			}{Type: "json_object"},
+			Temperature:    0,
+			ResponseFormat: opts.responseFormat,
 		},
 	}
 
@@ -276,4 +312,47 @@ func (s *GptBatchSession) getFile(ctx context.Context, fileId string) ([]byte, g
 		}
 	}
 	return data, nil
+}
+
+func getJsonSchema(v any) (map[string]any, error) {
+	if v == nil || reflect.ValueOf(v).Kind() != reflect.Ptr || reflect.ValueOf(v).Elem().Kind() != reflect.Struct {
+		return nil, fmt.Errorf("input must be a non-nil pointer to a struct")
+	}
+
+	// Generate the schema using the jsonschema package
+	schemaReflector := jsonschema.Reflector{}
+	schema := schemaReflector.Reflect(v)
+
+	// Convert the schema to JSON
+	schemaJSON, err := schema.MarshalJSON()
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal schema to JSON: %w", err)
+	}
+
+	var schemaMap map[string]any
+
+	err = json.Unmarshal(schemaJSON, &schemaMap)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal JSON to map: %w", err)
+	}
+
+	return schemaMap, nil
+}
+
+func getStructName(v any) string {
+	// Get the reflect.Type of the input
+	t := reflect.TypeOf(v)
+
+	// If it's a pointer, get the element type
+	if t.Kind() == reflect.Ptr {
+		t = t.Elem()
+	}
+
+	// Ensure that the type is a struct
+	if t.Kind() != reflect.Struct {
+		return ""
+	}
+
+	// Return the name of the struct
+	return t.Name()
 }

@@ -40,13 +40,13 @@ func NewGpt(token string, opts ...Option) (*Gpt, error) {
 			"Accept":        "application/json",
 		},
 	}
-	backofTransport := NewBackoffRoundTripper(headerTransport)
+	backOffTransport := NewBackoffRoundTripper(headerTransport)
 
 	gpt := &Gpt{
 		token:  token,
 		model:  "gpt-4o",
 		seed:   420,
-		client: &http.Client{Transport: backofTransport},
+		client: &http.Client{Transport: backOffTransport},
 	}
 
 	for _, opt := range opts {
